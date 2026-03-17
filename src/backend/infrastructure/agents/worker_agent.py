@@ -10,7 +10,7 @@ from langchain_core.runnables import RunnableConfig
 
 from ..llm.factory import get_research_llm
 from .states import WorkerState, TaskResult
-from .utils import fetch_rag_context
+from .search_subgraph import get_search_subgraph
 # 引入新提取的提示词模块
 from .prompt.worker_prompt import WORKER_SUMMARIZATION_TEMPLATE, WORKER_SYSTEM_PROMPT
 from .utils import construct_messages_with_fallback
@@ -20,23 +20,21 @@ from .utils import construct_messages_with_fallback
 # ==========================================
 
 async def search_node(state: WorkerState, config: RunnableConfig) -> Dict[str, Any]:
-    """Worker 搜索节点"""
+    """Worker 搜索节点 (代理到 Search Subgraph)"""
     task = state["task"]
     
-    # 使用 adispatch_custom_event 发送实时事件
-    await adispatch_custom_event(
-        "worker_progress", 
-        {
-            "task_id": task.id,
-            "title": task.title,
-            "status": "researching",
-            "message": f"正在研究 {task.title} 任务..."
-        },
-        config=config # 透传 config
-    )
+    # 构造子图输入
+    subgraph_input = {
+        "task": task,
+        "search_results": []
+    }
     
-    # 执行异步搜索
-    search_results = await fetch_rag_context(task.query)
+    # 调用子图
+    search_graph = get_search_subgraph()
+    result = await search_graph.ainvoke(subgraph_input, config=config)
+    
+    # 提取结果
+    search_results = result.get("search_results", [])
     
     return {"raw_data": search_results}
 
@@ -56,6 +54,8 @@ async def summarize_node(state: WorkerState, config: RunnableConfig) -> Dict[str
     for idx, item in enumerate(raw_data_list, 1):
         content = item.get("content", "").strip()
         source = item.get("document_name", "未知来源")
+        if item.get("url"):
+            source += f" / {item['url']}"
         
         # 过滤无效内容
         if content and content != "未找到相关资料" and len(content) > 10:

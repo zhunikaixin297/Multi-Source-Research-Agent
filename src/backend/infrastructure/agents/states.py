@@ -46,6 +46,9 @@ class PlannerState(TypedDict):
 class RawSearchResult(TypedDict):
     content: str
     document_name: str
+    url: Optional[str]
+    score: Optional[float]
+    provider: Optional[str]  # e.g., "mcp", "tavily", "duckduckgo"
 
 class WorkerState(TypedDict):
     task: ResearchTask

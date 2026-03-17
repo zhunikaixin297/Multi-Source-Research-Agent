@@ -146,9 +146,35 @@ class LangfuseSettings(BaseConfigSettings):
     """Langfuse 监控配置"""
     model_config = SettingsConfigDict(env_prefix="LANGFUSE_")
     
-    secret_key: str 
-    public_key: str 
-    base_url: str 
+    secret_key: Optional[str] = None
+    public_key: Optional[str] = None
+    base_url: str = "http://localhost:3000"
+
+
+class MCPSettings(BaseConfigSettings):
+    """MCP 连接配置"""
+    model_config = SettingsConfigDict(env_prefix="MCP_")
+    
+    # SSE 模式连接地址 (例如 http://localhost:8000/sse)
+    # 如果为空，则回退到本地 Stdio 启动模式
+    server_sse_url: Optional[str] = None
+    
+    # Stdio 模式下的本地路径 (MODULAR-RAG-MCP-SERVER 项目根目录)
+    server_local_path: str = "/home/zzl/code/MODULAR-RAG-MCP-SERVER"
+
+
+class SearchSettings(BaseConfigSettings):
+    """
+    Web Search 配置 (SEARCH_*)
+    支持 'duckduckgo' 或 'tavily'
+    """
+    model_config = SettingsConfigDict(env_prefix="SEARCH_")
+    
+    provider: Literal["duckduckgo", "tavily"] = "duckduckgo"
+    api_key: Optional[str] = None  # Tavily 需要 API Key
+    max_results: int = 5
+    # DuckDuckGo 后端引擎: auto, brave, duckduckgo, google, grokipedia, mojeek, wikipedia, yahoo, yandex
+    ddg_backend: str = "auto"
 
 
 # =============================================================================
@@ -179,6 +205,8 @@ class Settings(BaseConfigSettings):
     tei_rerank: TeiRerankSettings = Field(default_factory=TeiRerankSettings)
     opensearch: OpenSearchSettings = Field(default_factory=OpenSearchSettings)
     langfuse: LangfuseSettings = Field(default_factory=LangfuseSettings)
+    mcp: MCPSettings = Field(default_factory=MCPSettings)
+    search: SearchSettings = Field(default_factory=SearchSettings)
 
     def get_llm_config_by_name(self, name: str) -> LLMProviderConfig:
         """

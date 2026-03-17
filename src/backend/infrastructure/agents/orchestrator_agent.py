@@ -219,12 +219,20 @@ async def report_node(state: MainState, config: RunnableConfig):
     # 1. 组织输入数据
     # 使用明确的文本分隔符，指示 LLM 这是原始素材
     results_text = ""
+    all_references = set()
     for r in state.get("results", []):
         results_text += f"【子任务研究结果：{r.title}】\n{r.content}\n\n"
+        # 收集所有参考资料
+        if r.references:
+            all_references.update(r.references)
+
+    # 将参考资料列表转换为带索引的字符串
+    references_str = "\n".join([f"- {ref}" for ref in sorted(all_references)]) if all_references else "暂无参考资料"
 
     context_vars = {
         "goal": state.get('goal', '未命名主题'),
-        "results_text": results_text
+        "results_text": results_text,
+        "all_references": references_str
     }
 
     # 构建最终 User Prompt
@@ -233,7 +241,8 @@ async def report_node(state: MainState, config: RunnableConfig):
         # 使用 prompts 模块中的模板进行格式化
         prompt = REPORT_WRITER_TEMPLATE.format(
             goal=state.get('goal', '未命名主题'),
-            results_text=results_text
+            results_text=results_text,
+            all_references=references_str
         )
         
         messages = [HumanMessage(content=prompt)]

@@ -139,10 +139,10 @@ async def upload_and_ingest_document(
     
     # 2. 异步保存文件，避免阻塞主线程
     await save_upload_file_async(file, file_path)
-
+    abs_file_path = os.path.abspath(file_path)
     # 3. 创建 DocumentSource 对象
     source = DocumentSource(
-        file_path=file_path,
+        file_path=abs_file_path,
         document_name=file.filename,
         document_id=str(uuid.uuid4())
     )
