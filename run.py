@@ -47,12 +47,12 @@ def check_and_download_model():
     # 2. 如果不存在，下载到 models 根目录
     # 注意：根据 modelscope 行为，指定 --local_dir models 会自动在其下创建 BAAI/bge-reranker-base
     print(f"⬇️  未检测到模型，正在调用命令行下载: {MODEL_ID} ...")
-    print(f"    下载目标根目录: {MODELS_ROOT}")
+    print(f"    下载目标根目录: {full_model_path}")
 
     try:
         # 使用 subprocess 调用命令行
         # check=True 会在命令返回非零退出码时抛出 CalledProcessError
-        cmd = f"modelscope download --model {MODEL_ID} --local_dir {MODELS_ROOT}"
+        cmd = f"modelscope download --model {MODEL_ID} --local_dir {full_model_path}"
         subprocess.run(cmd, shell=True, check=True, env=os.environ)
         
         print("✅ 模型下载命令执行完毕！")
@@ -117,9 +117,24 @@ def run_services():
         print("\n🤖 [1/3] 正在启动 LiteLLM Proxy...")
         litellm_process = subprocess.Popen(
             ["litellm", "--config", "config.yaml"],
-            shell=True,
+            shell=False,
             env=os.environ
         )
+        #         # 核心修复：确保环境变量包含镜像站
+        # env = os.environ.copy()
+        # env["HF_ENDPOINT"] = "https://hf-mirror.com" # 解决模型下载慢
+        # env["PYTHONPATH"] = os.getcwd()             # 解决模块导入问题
+        
+        # # 【终极修复】使用绝对路径指定配置文件，防止 cwd 偏差
+        # config_path = os.path.abspath("config.yaml")
+        # if not os.path.exists(config_path):
+        #     raise FileNotFoundError(f"配置文件未找到: {config_path}")
+
+        # litellm_process = subprocess.Popen(
+        #     ["litellm", "--config", config_path, "--detailed_debug"], # 开启 debug 模式
+        #     shell=False,
+        #     env=env
+        # )
         processes.append(litellm_process)
 
         # ⛔️ 阻塞等待：直到 LiteLLM 的 4000 端口通了，才继续
@@ -130,9 +145,13 @@ def run_services():
         # 阶段 2: 启动 FastAPI Backend (Port 8002)
         # ========================================================
         print("\n🔌 [2/3] 正在启动 FastAPI (Backend)...")
+
+        backend_env = os.environ.copy()
+        backend_env["PYTHONPATH"] = os.getcwd()
+
         uvicorn_process = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "src.backend.api.server:app", "--port", "8002"],
-            env=os.environ,
+            env=backend_env,
             shell=False
         )
         processes.append(uvicorn_process)

@@ -5,8 +5,8 @@ import logging
 from ...core.config import settings
 from ...core.logging import setup_logging
 from .states import RawSearchResult
-from ..repository.factory import get_retrieval_service
 from ..langfuse.factory import init_langfuse_client
+from ..mcp_connector.client import get_mcp_client
 
 
 # === 日志配置 ===
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 async def fetch_rag_context(query: str) -> List[RawSearchResult]:
     """
-    异步执行 RAG 检索并解析结果。
+    异步执行 RAG 检索并解析结果（通过 MCP Client 调用独立的 RAG Server）。
     
     Args:
         query (str): 搜索查询词。
@@ -26,26 +26,19 @@ async def fetch_rag_context(query: str) -> List[RawSearchResult]:
     extracted_results: List[RawSearchResult] = []
 
     try:
-        # 1. 获取服务实例 (通常是单例或轻量级工厂)
-        retrieval_service = get_retrieval_service()
+        # 1. 获取 MCP Client 实例
+        mcp_client = get_mcp_client()
         
-        # 2. 调用搜索方法
-        raw_results = await retrieval_service.retrieve(query)
+        # 2. 调用 MCP 知识库查询工具
+        # 这里默认取 top_k=5，可根据需求修改
+        mcp_results = await mcp_client.query_knowledge_hub(query=query, top_k=5)
         
         # 3. 适配结果格式
-        if raw_results:
-            for item in raw_results:
-                chunk = getattr(item, "chunk", "")
-
-                if chunk:
-                    extracted_results.append({
-                        "content": chunk.content,
-                        "document_name": chunk.document_name
-                    })
+        if mcp_results:
+            extracted_results.extend(mcp_results)
 
     except Exception as e:
-        print(f"[Utils] Local Retrieval Service Error: {e}")
-        # 可以在这里记录日志
+        logger.error(f"[Utils] MCP Client Retrieval Service Error: {e}")
         pass
 
     # 4. 处理空结果逻辑
@@ -106,3 +99,21 @@ def construct_messages_with_fallback(
     # 这是一个兜底策略，确保即使 Langfuse 挂了，系统也能运行
     logger.info(f"使用本地 Prompt 模板生成模式: {prompt_name}")
     return None, None
+
+
+def format_rag_context(raw_data: List[RawSearchResult]) -> str:
+    # 1. 整理 Context 文本
+    context_parts = []
+    for idx, item in enumerate(raw_data, 1):
+        source_info = item['document_name']
+        if item.get('url'):
+            source_info += f" ({item['url']})"
+        elif item.get('provider'):
+            source_info += f" ({item['provider']})"
+            
+        context_parts.append(
+            f"--- 资料 {idx} (来源: {source_info}) ---\n"
+            f"{item['content']}\n"
+        )
+    context_text = "\n".join(context_parts)
+    return context_text

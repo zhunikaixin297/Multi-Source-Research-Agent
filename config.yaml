@@ -1,13 +1,25 @@
 model_list:
-  - model_name: "glm-4-flashx"  
+  - model_name: "glm-4.7"  
     litellm_params:
-      model: "openai/glm-4-flashx-250414"
+      model: "openai/glm-4.7" # 使用通用的 openai/ 前缀
+      api_base: "https://open.bigmodel.cn/api/paas/v4/"
+      api_key: "os.environ/GLM_API_KEY"
+  
+  - model_name: "glm-4-flash"  
+    litellm_params:
+      model: "openai/glm-4-flash" # 使用通用的 openai/ 前缀
       api_base: "https://open.bigmodel.cn/api/paas/v4/"
       api_key: "os.environ/GLM_API_KEY"
 
-  - model_name: "glm-4v-plus"  
+  - model_name: "glm-4v-flash"  
     litellm_params:
-      model: "openai/glm-4v-plus-0111" 
+      model: "openai/glm-4v-flash" 
+      api_base: "https://open.bigmodel.cn/api/paas/v4/"
+      api_key: "os.environ/GLM_API_KEY"
+
+  - model_name: "embedding-3"
+    litellm_params:
+      model: "openai/embedding-3"
       api_base: "https://open.bigmodel.cn/api/paas/v4/"
       api_key: "os.environ/GLM_API_KEY"
   
@@ -27,9 +39,8 @@ model_list:
     litellm_params:
       model: "ollama/qwen3-embedding:4b"
       api_base: "http://localhost:11434"
-      drop_params: True  # <-- **在这里添加这一行**
-
+      drop_params: True
 
 server_settings:
-  port: 4000          # <--- 在这里显式设置想要的端口
-  host: "0.0.0.0"     
+  port: 4000
+  host: "0.0.0.0"
