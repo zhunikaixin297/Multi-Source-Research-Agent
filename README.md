@@ -1,11 +1,10 @@
-# 多源知识驱动的多智能体研究框架 🚀
+# 多源知识驱动的多智能体研究框架
 
-[!\[Python Version\](https://img.shields.io/badge/Python-3.11+-blue.svg null)](https://python.org)
-[!\[FastAPI\](https://img.shields.io/badge/FastAPI-Latest-green.svg null)](https://fastapi.tiangolo.com)
-[!\[React\](https://img.shields.io/badge/React-19-61dafb.svg null)](https://reactjs.org)
-[!\[LangGraph\](https://img.shields.io/badge/LangGraph-Latest-purple.svg null)](https://langchain-ai.github.io/langgraph)
-
-[!\[License\](https://img.shields.io/badge/License-MIT-yellow.svg null)](LICENSE)
+[![Python Version](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Latest-green.svg)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://reactjs.org)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Latest-purple.svg)](https://langchain-ai.github.io/langgraph)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ## 📖 项目简介
 
@@ -759,12 +758,6 @@ deepresearch-agent/
 ├── .env                           # 环境变量
 └── README.md                      # 项目文档
 ```
-
-***
-
-## 🤝 贡献指南
-
-欢迎所有形式的贡献！
 
 ***
 
