@@ -1,9 +1,14 @@
 from functools import lru_cache
 
+from typing import Optional
+from ...core.config import settings
 from .opensearch_store import AsyncOpenSearchRAGStore
 from ...domain.interfaces import Retriever
 from .retriever import RetrievalService
-from ..llm.factory import get_rewrite_llm, get_rerank_client
+from ..llm.factory import get_rewrite_llm, get_rerank_client, get_embedding_model
+from .session_memory_manager import get_session_memory_manager as _get_manager
+from .session_chroma_store import SessionChromaStore
+from ...services.session_rag_service import SessionRetrievalService
 
 @lru_cache()
 def get_opensearch_store() -> AsyncOpenSearchRAGStore:
@@ -22,4 +27,33 @@ def get_retrieval_service() -> Retriever:
         search_repo=get_opensearch_store(),
         rewrite_llm=get_rewrite_llm(),
         rerank_client=get_rerank_client()
+    )
+
+
+@lru_cache()
+def get_session_manager():
+    return _get_manager(settings.session_rag)
+
+
+_session_store: Optional[SessionChromaStore] = None
+
+
+def get_session_store() -> SessionChromaStore:
+    global _session_store
+    if _session_store is None:
+        manager = get_session_manager()
+        embedding_model = get_embedding_model()
+        _session_store = SessionChromaStore(
+            embedding_model=embedding_model,
+            session_manager=manager,
+            settings=settings.session_rag,
+        )
+    return _session_store
+
+
+@lru_cache()
+def get_session_retrieval_service() -> SessionRetrievalService:
+    return SessionRetrievalService(
+        store=get_session_store(),
+        reranker=get_rerank_client(),
     )

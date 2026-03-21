@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import List, Tuple
 from langchain_text_splitters import (
     MarkdownHeaderTextSplitter,
@@ -68,6 +69,7 @@ class MarkdownSplitter(TextSplitter):
             f"MarkdownSplitter 初始化完毕。最大Tokens: {max_chunk_tokens}，"
             f"重叠Tokens: {chunk_overlap_tokens}，编码器: {encoding_name}"
         )
+        self._image_pattern = re.compile(r"\[IMAGE:\s*([^\]]+)\]")
 
     def _token_length(self, text: str) -> int:
         """辅助方法：计算 token 数量"""
@@ -91,6 +93,46 @@ class MarkdownSplitter(TextSplitter):
             return list(headers.values())
         return [v for _, v in sorted_headers]
 
+    @staticmethod
+    def _is_heading_only_chunk(text: str) -> bool:
+        stripped = text.strip()
+        if not stripped:
+            return False
+        lines = [line.strip() for line in stripped.splitlines() if line.strip()]
+        if len(lines) > 2:
+            return False
+        heading_lines = [line for line in lines if line.startswith("#")]
+        if not heading_lines:
+            return False
+        non_heading_lines = [line for line in lines if not line.startswith("#")]
+        if not non_heading_lines:
+            return True
+        if len(non_heading_lines) == 1 and len(non_heading_lines[0]) <= 20:
+            return True
+        return False
+
+    def _merge_heading_only_docs(self, docs: List[Document]) -> List[Document]:
+        if not docs:
+            return docs
+        merged: List[Document] = []
+        idx = 0
+        while idx < len(docs):
+            current = docs[idx]
+            if self._is_heading_only_chunk(current.page_content) and idx + 1 < len(docs):
+                next_doc = docs[idx + 1]
+                next_doc.page_content = (
+                    f"{current.page_content.rstrip()}\n\n{next_doc.page_content.lstrip()}"
+                )
+                merged.append(next_doc)
+                idx += 2
+                continue
+            merged.append(current)
+            idx += 1
+        return merged
+
+    def _extract_image_ids(self, text: str) -> List[str]:
+        return [match.strip() for match in self._image_pattern.findall(text)]
+
     def split(
         self, markdown_content: str, source: DocumentSource
     ) -> List[DocumentChunk]:
@@ -106,6 +148,7 @@ class MarkdownSplitter(TextSplitter):
             initial_md_chunks: List[Document] = self._md_splitter.split_text(
                 markdown_content
             )
+            initial_md_chunks = self._merge_heading_only_docs(initial_md_chunks)
         except Exception as e:
             log.error(f"Markdown 标题分割失败: {e}", exc_info=True)
             return [] 
@@ -118,6 +161,9 @@ class MarkdownSplitter(TextSplitter):
             parent_headings = self._extract_parent_headings(md_chunk.metadata)
             chunk_metadata = md_chunk.metadata.copy()
             chunk_metadata.update(source.metadata)
+            image_ids = self._extract_image_ids(chunk_content)
+            if image_ids:
+                chunk_metadata["image_ids"] = image_ids
 
             if chunk_token_length <= self._max_chunk_tokens:
                 # 长度达标，直接添加
@@ -147,6 +193,9 @@ class MarkdownSplitter(TextSplitter):
                     sub_parent_headings = self._extract_parent_headings(sub_chunk.metadata)
                     sub_chunk_metadata = sub_chunk.metadata.copy()
                     sub_chunk_metadata.update(source.metadata)
+                    sub_image_ids = self._extract_image_ids(sub_chunk.page_content)
+                    if sub_image_ids:
+                        sub_chunk_metadata["image_ids"] = sub_image_ids
 
                     final_chunks.append(
                         DocumentChunk(

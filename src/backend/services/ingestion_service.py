@@ -5,6 +5,7 @@ from typing import Callable, Awaitable, Optional, List
 # --- 导入领域模型和接口 ---
 from ..domain.interfaces import Ingestor, DocumentParser, PreProcessor, TextSplitter, SearchRepository
 from ..domain.models import DocumentSource, DocumentChunk
+from ..infrastructure.repository.session_memory_manager import SessionMemoryManager
 
 # --- 导入日志配置 ---
 from ..core.logging import setup_logging
@@ -29,14 +30,18 @@ class IngestionService(Ingestor):
         self,
         parser: DocumentParser,
         splitter: TextSplitter,
-        preprocessor: PreProcessor,
-        store: SearchRepository
+        preprocessor: Optional[PreProcessor] = None,
+        store: Optional[SearchRepository] = None,
+        session_manager: Optional[SessionMemoryManager] = None,
+        max_concurrency: int = 2,
     ):
         self.parser = parser
         self.splitter = splitter
         self.preprocessor = preprocessor
         self.store = store
-        log.info("IngestionService 初始化完毕 (依赖已注入)。")
+        self.session_manager = session_manager
+        self.semaphore = asyncio.Semaphore(value=max(1, max_concurrency))
+        log.info(f"IngestionService 初始化完毕 (并发限制: {max_concurrency})。")
 
     async def _emit(self, msg: str, status_callback: Optional[Callable[[str], Awaitable[None]]] = None):
         """辅助方法：同时打印日志并调用回调"""
@@ -120,3 +125,46 @@ class IngestionService(Ingestor):
             await self._emit_error(f"处理过程发生未知错误: {str(e)}", status_callback)
             import traceback
             traceback.print_exc()
+
+    async def pipeline_workspace_document(
+        self,
+        source: DocumentSource,
+        workspace_id: str,
+        status_callback: Optional[Callable[[str], Awaitable[None]]] = None,
+    ) -> int:
+        if not self.session_manager:
+            raise RuntimeError("session_manager 未注入，无法处理 workspace 文档摄取")
+
+        await self._emit(f"--- [开始处理] 工作区文档: {source.document_name} ---", status_callback)
+        async with self.semaphore:
+            try:
+                self.session_manager.get_or_create_workspace(workspace_id)
+                source.metadata = source.metadata or {}
+                source.metadata["workspace_id"] = workspace_id
+
+                await self._emit("步骤 1/3: 正在解析文档...", status_callback)
+                md_content = await self.parser.parse(source)
+                if not md_content or not str(md_content).strip():
+                    await self._emit_error("解析失败: 未提取到内容。", status_callback)
+                    return 0
+                await self._emit(f"步骤 1/3: 解析成功，内容长度: {len(md_content)}", status_callback)
+
+                await self._emit("步骤 2/3: 正在切分文本...", status_callback)
+                chunks = await asyncio.to_thread(self.splitter.split, md_content, source)
+                if not chunks:
+                    await self._emit_error("切分失败或未产生任何块。", status_callback)
+                    return 0
+                await self._emit(f"步骤 2/3: 切分成功，生成 {len(chunks)} 个块。", status_callback)
+
+                await self._emit("步骤 3/3: 增量写入工作区向量库...", status_callback)
+                written = await self.session_manager.add_documents(workspace_id, chunks)
+                await self._emit(f"✅ 写入完成: {written} 个块。", status_callback)
+                return written
+            except FileNotFoundError:
+                await self._emit_error(f"文件未找到: {source.file_path}", status_callback)
+                return 0
+            except Exception as e:
+                await self._emit_error(f"处理过程发生未知错误: {str(e)}", status_callback)
+                import traceback
+                traceback.print_exc()
+                return 0

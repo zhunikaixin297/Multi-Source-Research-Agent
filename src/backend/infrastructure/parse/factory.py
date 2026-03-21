@@ -91,11 +91,9 @@ def get_docling_parser() -> DoclingParser:
         )
         
         # --- 3. 实例化 Parser ---
-        MAX_CONCURRENT_DOCS = 1 
-        
         return DoclingParser(
             converter=doc_converter, 
-            max_concurrent_docs=MAX_CONCURRENT_DOCS
+            max_concurrent_docs=settings.docling_general.max_concurrent_docs
         )
 
     except Exception as e:

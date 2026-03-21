@@ -110,7 +110,8 @@ class ReportRequest(BaseModel):
     # 如果是 start 阶段，业务逻辑中会校验 query 是否存在
     query: Optional[str] = Field(None, description="用户生成报告的原始查询")
     
-    report_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="报告的唯一ID (即 thread_id)")
+    task_id: str = Field(default_factory=lambda: str(uuid.uuid4()), description="任务唯一ID (即 thread_id)")
+    workspace_id: str = Field(..., description="工作区唯一ID")
     
     # 新增：控制字段，用于处理 LangGraph 的中断恢复 (Start / Approve / Revise)
     action: Literal["start", "approve", "revise"] = Field("start", description="执行动作：开始、批准、修改")

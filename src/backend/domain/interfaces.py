@@ -24,6 +24,28 @@ class DocumentParser(ABC):
         pass
 
 
+class EmbeddingModel(ABC):
+    """
+    向量化模型接口。
+    """
+
+    @abstractmethod
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        pass
+
+    @abstractmethod
+    def embed_query(self, text: str) -> List[float]:
+        pass
+
+    @abstractmethod
+    async def aembed_documents(self, texts: List[str]) -> List[List[float]]:
+        pass
+
+    @abstractmethod
+    async def aembed_query(self, text: str) -> List[float]:
+        pass
+
+
 class TextSplitter(ABC):
     """
     对应 "基于markdown结构分块" 和 "基于语义分块"。

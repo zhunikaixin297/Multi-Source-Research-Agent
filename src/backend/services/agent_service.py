@@ -21,7 +21,8 @@ class AgentServiceImpl(AgentService):
         实现 generate_report 接口。
         根据 request.action 决定是启动新任务还是恢复中断的任务。
         """
-        thread_id = request.report_id
+        thread_id = request.task_id
+        workspace_id = request.workspace_id
         input_data = None
         resume_command = None
 
@@ -50,12 +51,18 @@ class AgentServiceImpl(AgentService):
 
         # 2. 调用核心流生成逻辑
         # 复用原 event_stream_generator 的逻辑，但现在它是内部实现细节
-        async for event in self._run_graph_stream(thread_id, input_data, resume_command):
+        async for event in self._run_graph_stream(
+            thread_id=thread_id,
+            workspace_id=workspace_id,
+            input_data=input_data,
+            resume_command=resume_command,
+        ):
             yield event
 
     async def _run_graph_stream(
         self, 
-        thread_id: str, 
+        thread_id: str,
+        workspace_id: str,
         input_data: Optional[Dict[str, Any]] = None, 
         resume_command: Optional[Command] = None
     ) -> AsyncGenerator[str, None]:
@@ -93,12 +100,16 @@ class AgentServiceImpl(AgentService):
         # --- 🟢 修改结束 ---
 
         config = {
-            "configurable": {"thread_id": thread_id}, 
+            "configurable": {
+                "workspace_id": workspace_id,
+                "thread_id": thread_id,
+            },
             "callbacks": callbacks, # 使用动态生成的 callbacks 列表
             "metadata": {
                 # 即使没开启 Trace，保留 metadata 也不影响运行
                 "langfuse_session_id": thread_id,  
-                "thread_id": thread_id             
+                "thread_id": thread_id,
+                "workspace_id": workspace_id,
             }
         }
 
