@@ -95,6 +95,8 @@ class AgentServiceImpl(AgentService):
         async for event in self._run_graph_stream(
             thread_id=thread_id,
             workspace_id=workspace_id,
+            action=request.action,
+            query=request.query,
             input_data=input_data,
             resume_command=resume_command,
         ):
@@ -104,6 +106,8 @@ class AgentServiceImpl(AgentService):
         self, 
         thread_id: str,
         workspace_id: str,
+        action: str,
+        query: Optional[str],
         input_data: Optional[Dict[str, Any]] = None, 
         resume_command: Optional[Command] = None
     ) -> AsyncGenerator[str, None]:
@@ -150,10 +154,10 @@ class AgentServiceImpl(AgentService):
             **_build_langfuse_trace_config(
                 thread_id=thread_id,
                 workspace_id=workspace_id,
-                action=request.action,
+                action=action,
                 trace_name=trace_name,
                 extra_tags=[
-                    f"goal:{request.query[:80]}" if request.query else None,
+                    f"goal:{query[:80]}" if query else None,
                 ],
             ),
         }
