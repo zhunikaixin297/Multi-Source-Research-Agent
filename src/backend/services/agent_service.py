@@ -1,6 +1,6 @@
 import json
 import traceback
-from typing import AsyncGenerator, Optional, Dict, Any
+from typing import AsyncGenerator, Optional, Dict, Any, Sequence
 from langgraph.types import Command
 from langfuse.langchain import CallbackHandler
 
@@ -10,6 +10,45 @@ from ..domain.interfaces import AgentService
 from ..domain.models import ReportRequest
 from ..infrastructure.langfuse.factory import init_langfuse_client
 from ..core.config import settings
+
+
+def _build_langfuse_trace_config(
+    *,
+    thread_id: str,
+    workspace_id: str,
+    action: str,
+    trace_name: str,
+    user_id: Optional[str] = None,
+    extra_tags: Optional[Sequence[str]] = None,
+) -> Dict[str, Any]:
+    tags = [
+        "deepresearch-agent",
+        f"workspace:{workspace_id}",
+        f"thread:{thread_id}",
+        f"action:{action}",
+    ]
+
+    if extra_tags:
+        tags.extend(str(tag) for tag in extra_tags if tag)
+
+    # 去重但保持顺序，避免 Langfuse tags 出现重复值。
+    deduped_tags = list(dict.fromkeys(tags))
+
+    metadata: Dict[str, Any] = {
+        "langfuse_session_id": workspace_id,
+        "langfuse_tags": deduped_tags,
+        "workspace_id": workspace_id,
+        "thread_id": thread_id,
+        "action": action,
+        "trace_name": trace_name,
+    }
+
+    metadata["langfuse_user_id"] = user_id or workspace_id
+
+    return {
+        "metadata": metadata,
+        "run_name": trace_name,
+    }
 
 class AgentServiceImpl(AgentService):
     def __init__(self):
@@ -73,6 +112,7 @@ class AgentServiceImpl(AgentService):
         # --- 🟢 修改开始：Langfuse 运行状态检测 ---
         langfuse = None
         callbacks = []
+        trace_name = f"research-report-{workspace_id}"
         
         try:
             # 1. 初始化客户端
@@ -105,12 +145,15 @@ class AgentServiceImpl(AgentService):
                 "thread_id": thread_id,
             },
             "callbacks": callbacks, # 使用动态生成的 callbacks 列表
-            "metadata": {
-                # 即使没开启 Trace，保留 metadata 也不影响运行
-                "langfuse_session_id": thread_id,  
-                "thread_id": thread_id,
-                "workspace_id": workspace_id,
-            }
+            **_build_langfuse_trace_config(
+                thread_id=thread_id,
+                workspace_id=workspace_id,
+                action=request.action,
+                trace_name=trace_name,
+                extra_tags=[
+                    f"goal:{request.query[:80]}" if request.query else None,
+                ],
+            ),
         }
 
         try:
