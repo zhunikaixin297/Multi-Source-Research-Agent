@@ -35,7 +35,7 @@ def _build_langfuse_trace_config(
     deduped_tags = list(dict.fromkeys(tags))
 
     metadata: Dict[str, Any] = {
-        "langfuse_session_id": workspace_id,
+        "langfuse_session_id": thread_id,
         "langfuse_tags": deduped_tags,
         "workspace_id": workspace_id,
         "thread_id": thread_id,
@@ -43,10 +43,12 @@ def _build_langfuse_trace_config(
         "trace_name": trace_name,
     }
 
-    metadata["langfuse_user_id"] = user_id or workspace_id
+    if user_id:
+        metadata["langfuse_user_id"] = user_id
 
     return {
         "metadata": metadata,
+        "tags": deduped_tags,
         "run_name": trace_name,
     }
 
@@ -112,7 +114,7 @@ class AgentServiceImpl(AgentService):
         # --- 🟢 修改开始：Langfuse 运行状态检测 ---
         langfuse = None
         callbacks = []
-        trace_name = f"research-report-{workspace_id}"
+        trace_name = f"research-report-{thread_id}"
         
         try:
             # 1. 初始化客户端
