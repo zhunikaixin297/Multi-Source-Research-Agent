@@ -322,7 +322,9 @@ class AsyncOpenSearchRAGStore(SearchRepository):
             log.error(f"BM25 (multi_match) 检索时出错: {e.status_code} {e.info}", exc_info=True)
             return []
 
-    async def _base_vector_search(self, field_name: str, query_embedding: List[float], k: int) -> List[Dict[str, Any]]:
+    async def _base_vector_search(self, field_name: str, query_embedding: Optional[List[float]], k: int) -> List[Dict[str, Any]]:
+        if query_embedding is None:
+            return []
         query = {
             "size": k,
             "query": {
@@ -395,22 +397,26 @@ class AsyncOpenSearchRAGStore(SearchRepository):
             return []
 
         # 2. 并发执行向量搜索
-        vector_tasks = [
-            self._base_vector_search("embedding_content", query_embedding, k=k*2),
-            self._base_vector_search("embedding_parent_headings", query_embedding, k=k*2),
-            self._base_vector_search("embedding_summary", query_embedding, k=k*2),
-            self._base_vector_search("embedding_hypothetical_questions", query_embedding, k=k*2)
-        ]
-        
-        try:
-            (
-                vec_content_results, vec_headings_results, 
-                vec_summary_results, vec_questions_results
-            ) = await asyncio.gather(*vector_tasks)
-        except Exception as e:
-            log.error(f"混合搜索第二阶段失败: {e}", exc_info=True)
-            # 降级策略：如果向量搜索失败，仅使用 BM25
-            vec_content_results, vec_headings_results, vec_summary_results, vec_questions_results = [], [], [], []
+        vec_content_results, vec_headings_results, vec_summary_results, vec_questions_results = [], [], [], []
+        if query_embedding is None:
+            log.warning("Query embedding 为空，跳过向量检索，仅使用 BM25 结果。")
+        else:
+            vector_tasks = [
+                self._base_vector_search("embedding_content", query_embedding, k=k*2),
+                self._base_vector_search("embedding_parent_headings", query_embedding, k=k*2),
+                self._base_vector_search("embedding_summary", query_embedding, k=k*2),
+                self._base_vector_search("embedding_hypothetical_questions", query_embedding, k=k*2)
+            ]
+            
+            try:
+                (
+                    vec_content_results, vec_headings_results, 
+                    vec_summary_results, vec_questions_results
+                ) = await asyncio.gather(*vector_tasks)
+            except Exception as e:
+                log.error(f"混合搜索第二阶段失败: {e}", exc_info=True)
+                # 降级策略：如果向量搜索失败，仅使用 BM25
+                vec_content_results, vec_headings_results, vec_summary_results, vec_questions_results = [], [], [], []
 
         # 3. RRF 融合 (获取 ID 和 RRF 分数)
         all_results_lists = [

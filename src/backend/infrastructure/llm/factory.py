@@ -47,6 +47,8 @@ def _create_chat_llm(config_name: str, temperature: float = 0, max_retries: int 
     """
     # 1. 动态获取配置对象
     config = settings.get_llm_config_by_name(config_name)
+    if not config.base_url or not config.api_key or not config.model:
+        raise RuntimeError(f"LLM 配置缺失: {config_name} (base_url/api_key/model)")
     
     # 2. 实例化包装类
     return ConcurrencyControlledChatOpenAI(
@@ -79,6 +81,8 @@ def get_embedding_model() -> OpenAIEmbeddings:
     """
     # 1. 获取 Embedding 专用配置
     config = settings.get_llm_config_by_name("embedding")
+    if not config.base_url or not config.api_key or not config.model:
+        raise RuntimeError("Embedding LLM 配置缺失 (base_url/api_key/model)")
     
     # 2. 实例化 OpenAIEmbeddings
     # 注意：OpenAIEmbeddings 的参数与 ChatOpenAI 略有不同

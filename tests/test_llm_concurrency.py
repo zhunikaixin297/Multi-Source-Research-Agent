@@ -12,6 +12,8 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_concurrency():
+    if os.getenv("RUN_LLM_TESTS") != "1":
+        pytest.skip("RUN_LLM_TESTS not set, skipping external LLM concurrency test")
     llm = get_research_llm()
     print(f"LLM type: {type(llm)}")
     

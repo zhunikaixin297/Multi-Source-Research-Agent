@@ -12,6 +12,7 @@ wheels/
 
 models/
 docs/
+.worktrees/
 opensearch_data/
 .pytest_cache/
 evaluation/

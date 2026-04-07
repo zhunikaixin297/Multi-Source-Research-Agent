@@ -264,6 +264,7 @@ async def report_node(state: MainState, config: RunnableConfig):
         return {"final_report": response.content}
     except Exception as e:
         print(f"撰写报告过程中发生错误：{e}")
+        return {"final_report": ""}
 
 # ==========================================
 # 4. 图构建 (Graph Construction)

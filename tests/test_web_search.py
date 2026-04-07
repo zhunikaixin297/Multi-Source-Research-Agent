@@ -18,6 +18,8 @@ async def test_web_search():
     """
     Test script to verify the Web Search tool (DuckDuckGo).
     """
+    if os.getenv("RUN_WEB_SEARCH_TESTS") != "1":
+        pytest.skip("RUN_WEB_SEARCH_TESTS not set, skipping web search test")
     test_queries = [
         "2024年巴黎奥运会金牌榜",
         "DeepSeek-V3 模型特点",

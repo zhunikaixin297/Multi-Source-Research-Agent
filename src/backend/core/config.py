@@ -32,9 +32,9 @@ class LLMProviderConfig(BaseConfigSettings):
     统一的 LLM 提供商配置基类。
     所有涉及 LLM 调用的配置都应继承此类，以保证接口一致性。
     """
-    api_key: str
-    base_url: str
-    model: str
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    model: Optional[str] = None
     max_concurrency: int = 3  # 默认并发数
 
     # 允许子类定义额外字段（如 embedding 的 dimension）
@@ -111,6 +111,8 @@ class ServerSettings(BaseConfigSettings):
     host: str = "0.0.0.0"
     port: int = 8002
     max_file_size_mb: int = 100
+    cors_allow_origins: str = "*"
+    cors_allow_credentials: bool = False
 
 
 class TextSplitterSettings(BaseConfigSettings):
@@ -212,7 +214,7 @@ class Settings(BaseConfigSettings):
     """
     # --- 全局 ---
     log_level: str = Field(default="INFO", validation_alias="LOG_LEVEL")
-    litellm_proxy_url: str = Field(validation_alias="LITELLM_PROXY_URL")
+    litellm_proxy_url: Optional[str] = Field(default=None, validation_alias="LITELLM_PROXY_URL")
     hf_endpoint: str = Field(default="https://hf-mirror.com", validation_alias="HF_ENDPOINT")
 
     # --- 模块 ---

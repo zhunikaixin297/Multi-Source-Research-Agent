@@ -19,6 +19,8 @@ async def test_mcp_connectivity():
     Run this after starting the MCP Server in SSE mode:
     python -m src.mcp_server.server --sse
     """
+    if os.getenv("RUN_MCP_TESTS") != "1":
+        pytest.skip("RUN_MCP_TESTS not set, skipping MCP connectivity test")
     # 1. Get client instance
     # Ensure MCP_SERVER_SSE_URL=http://localhost:8000/sse is set if testing SSE
     client = get_mcp_client()
