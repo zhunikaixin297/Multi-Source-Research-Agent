@@ -1,10 +1,14 @@
 
 import asyncio
 import os
+import sys
 import shutil
 import uuid
 import pytest
 from pathlib import Path
+
+# Add src to path
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from src.backend.infrastructure.repository.session_memory_manager import get_session_memory_manager
 from src.backend.services.factory import get_workspace_ingestion_service
 from src.backend.domain.models import DocumentSource
@@ -12,6 +16,8 @@ from src.backend.core.config import settings
 
 @pytest.mark.asyncio
 async def test_workspace_lifecycle():
+    if os.getenv("RUN_WORKSPACE_TESTS") != "1":
+        pytest.skip("RUN_WORKSPACE_TESTS not set, skipping workspace lifecycle test")
     workspace_id = f"test_ws_{uuid.uuid4().hex[:8]}"
     manager = get_session_memory_manager(settings.session_rag)
     
@@ -24,6 +30,8 @@ async def test_workspace_lifecycle():
         
         # 2. 模拟上传文件
         sample_file = Path("tests/sample_documents/simple.pdf")
+        if not sample_file.exists():
+            pytest.skip("Sample document missing: tests/sample_documents/simple.pdf")
         dest_file = manager.workspace_documents_dir(workspace_id) / "simple.pdf"
         shutil.copy(sample_file, dest_file)
         

@@ -3,6 +3,7 @@ import sys
 import os
 import time
 import socket
+import platform
 from dotenv import load_dotenv
 
 # ================= 配置区域 =================
@@ -202,7 +203,13 @@ def run_services():
                 pass
             
             if p.poll() is None:
-                subprocess.run(f"taskkill /F /T /PID {p.pid}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if platform.system().lower().startswith("win"):
+                    subprocess.run(f"taskkill /F /T /PID {p.pid}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                else:
+                    try:
+                        p.kill()
+                    except Exception:
+                        pass
                 
         print("✅ 所有服务已清理。")
 

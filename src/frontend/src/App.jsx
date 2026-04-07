@@ -8,6 +8,8 @@ import 'katex/dist/katex.min.css';
 
 import { FileText, CheckCircle, Edit3, Play, Loader, Clock, Terminal, Search, BookOpen, Upload, Trash2, RefreshCw, ChevronLeft, ChevronRight, File } from 'lucide-react';
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8002";
+
 export default function App() {
   const [goal, setGoal] = useState("");
   const [workspaceId, setWorkspaceId] = useState(null);
@@ -46,7 +48,7 @@ export default function App() {
     if (workspaceId) {
       try {
         addLog(`🧹 正在物理销毁工作区: ${workspaceId}...`);
-        await fetch(`http://localhost:8002/api/workspaces/${workspaceId}`, { method: "DELETE" });
+        await fetch(`${API_BASE}/api/workspaces/${workspaceId}`, { method: "DELETE" });
         addLog(`✅ 工作区资源已彻底清理。`);
       } catch (e) {
         addLog(`⚠️ 清理工作区失败: ${e.message}`);
@@ -69,7 +71,7 @@ export default function App() {
 
   const ensureWorkspace = async () => {
     if (workspaceId) return workspaceId;
-    const response = await fetch("http://localhost:8002/api/workspaces", { method: "POST" });
+    const response = await fetch(`${API_BASE}/api/workspaces`, { method: "POST" });
     if (!response.ok) throw new Error("创建工作区失败");
     const data = await response.json();
     setWorkspaceId(data.workspace_id);
@@ -86,7 +88,7 @@ export default function App() {
     setTasks({}); 
     try {
       const wsId = await ensureWorkspace();
-      const createTaskResp = await fetch("http://localhost:8002/api/tasks", {
+      const createTaskResp = await fetch(`${API_BASE}/api/tasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ goal, workspace_id: wsId }),
@@ -94,7 +96,7 @@ export default function App() {
       if (!createTaskResp.ok) throw new Error("创建任务失败");
       const taskData = await createTaskResp.json();
       setTaskId(taskData.task_id);
-      const url = `http://localhost:8002/api/tasks/${taskData.task_id}/stream?workspace_id=${encodeURIComponent(wsId)}&goal=${encodeURIComponent(goal)}`;
+      const url = `${API_BASE}/api/tasks/${taskData.task_id}/stream?workspace_id=${encodeURIComponent(wsId)}&goal=${encodeURIComponent(goal)}`;
       connectSSE(url);
     } catch (e) {
       addLog(`❌ 启动任务失败: ${e.message}`);
@@ -184,7 +186,7 @@ export default function App() {
       const wsId = await ensureWorkspace();
       const formData = new FormData();
       formData.append("file", file);
-      const response = await fetch(`http://localhost:8002/api/workspaces/${wsId}/documents`, {
+      const response = await fetch(`${API_BASE}/api/workspaces/${wsId}/documents`, {
         method: "POST",
         body: formData,
       });
@@ -222,7 +224,7 @@ export default function App() {
 
   const fetchAndStream = async (action, fb = null) => {
     try {
-      const response = await fetch("http://localhost:8002/api/tasks/review", {
+      const response = await fetch(`${API_BASE}/api/tasks/review`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ task_id: taskId, workspace_id: workspaceId, action, feedback: fb }),

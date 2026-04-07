@@ -50,7 +50,8 @@ class DoclingParser(DocumentParser):
         workspace_id: str,
         document_id: str,
     ) -> List[Dict[str, Any]]:
-        images_dir = self.session_manager.init_workspace_env(workspace_id)
+        self.session_manager.init_workspace_env(workspace_id)
+        images_dir = self.session_manager.workspace_images_dir(workspace_id)
         images_metadata: List[Dict[str, Any]] = []
         pictures = getattr(doc, "pictures", []) or []
         for idx, picture in enumerate(pictures, start=1):

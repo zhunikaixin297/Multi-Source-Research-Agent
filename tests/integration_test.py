@@ -4,10 +4,19 @@ import os
 import uuid
 import time
 import json
+import socket
+import pytest
 
 BASE_URL = "http://localhost:8002"
 
 def test_full_flow():
+    host = "localhost"
+    port = 8002
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.5)
+        if sock.connect_ex((host, port)) != 0:
+            pytest.skip("Backend service not running on localhost:8002")
+
     # 1. Create Workspace
     print("--- 1. Creating Workspace ---")
     resp = requests.post(f"{BASE_URL}/api/workspaces")
@@ -19,6 +28,8 @@ def test_full_flow():
     # 2. Upload Document
     print("\n--- 2. Uploading Document ---")
     sample_doc_path = "tests/sample_documents/simple.pdf"
+    if not os.path.exists(sample_doc_path):
+        pytest.skip("Sample document missing: tests/sample_documents/simple.pdf")
     with open(sample_doc_path, "rb") as f:
         files = {"file": ("simple.pdf", f, "application/pdf")}
         resp = requests.post(f"{BASE_URL}/api/workspaces/{workspace_id}/documents", files=files)

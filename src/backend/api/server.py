@@ -30,6 +30,35 @@ from .schemas import (
 
 log = logging.getLogger(__name__)
 
+ALLOWED_UPLOAD_EXTENSIONS = {".pdf", ".docx"}
+
+
+def sanitize_upload_filename(filename: str) -> str:
+    normalized = filename.replace("\\", "/")
+    return Path(normalized).name.replace("\x00", "")
+
+
+def ensure_allowed_extension(filename: str) -> None:
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"不支持的文件类型: {ext}")
+
+
+def resolve_cors_settings(origins, allow_credentials: bool):
+    if isinstance(origins, str):
+        if origins.strip() == "" or origins.strip() == "*":
+            origins = ["*"]
+        else:
+            origins = [o.strip() for o in origins.split(",") if o.strip()]
+    if not origins:
+        origins = ["*"]
+
+    if "*" in origins and allow_credentials:
+        log.warning("CORS allow_credentials 与通配符 origins 冲突，已自动禁用 allow_credentials。")
+        allow_credentials = False
+
+    return origins, allow_credentials
+
 # ==========================================
 # 0. 定时清理后台任务
 # ==========================================
@@ -65,10 +94,15 @@ async def startup_event():
     # 启动后台清理协程
     asyncio.create_task(auto_cleanup_workspaces())
 
+cors_origins, cors_allow_credentials = resolve_cors_settings(
+    settings.server.cors_allow_origins,
+    settings.server.cors_allow_credentials,
+)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -217,7 +251,9 @@ async def upload_workspace_document(
             detail=f"当前工作区文档数量已达上限 {settings.session_rag.max_workspace_documents}",
         )
 
-    safe_filename = f"{uuid.uuid4()}_{file.filename}"
+    ensure_allowed_extension(file.filename)
+    safe_name = sanitize_upload_filename(file.filename)
+    safe_filename = f"{uuid.uuid4()}_{safe_name}"
     workspace_file_path = workspace_docs_dir / safe_filename
     
     # 直接保存到工作区目录
