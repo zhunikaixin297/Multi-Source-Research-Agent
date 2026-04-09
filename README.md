@@ -8,7 +8,7 @@
 
 ## 📖 项目简介
 
-本项目是一个基于 LangGraph 的自动化研究与报告生成系统。系统能够协同处理外部实时信息、全局历史库与当前会话的临时文档，完成从需求拆解、资料检索到最终报告合成的完整研究闭环。
+本项目是一个面向复杂业务场景的自动化调研系统。通过 **LangGraph** 状态机编排多智能体协作流，并核心引入 **MCP (Model Context Protocol)** 协议实现推理编排层与知识检索层的物理隔离，支持百万级 Token 背景下的高效率、可观测深度研究。
 
 ***
 
@@ -22,17 +22,21 @@
 
 Worker Agent 根据任务意图，通过语义路由动态选择知识源：
 
-- **短期工作记忆 (Session Memory)**：基于本地 Chroma 数据库。利用 Docling 实现临时上传文档的流式解析与入库，支持极低延迟的当前会话检索。
-- **长期全局记忆 (Global Memory)**：通过 MCP 协议外挂独立的 RAG 服务（如 [MODULAR-RAG-MCP-SERVER](https://github.com/zhunikaixin297/MODULAR-RAG-MCP-SERVER)），以标准化 Tool 的形式获取历史沉淀资料，实现读写分离与架构解耦。
-- **全网实时搜索 (Web Search)**：集成 Tavily/DuckDuckGo 获取最新动态。
+- **企业全局记忆 (MCP-based Global RAG)**：通过自研 MCP 接口跨进程接入独立 RAG 服务集群（如 [MODULAR-RAG-MCP-SERVER](https://github.com/jerry-ai-dev/MODULAR-RAG-MCP-SERVER)），实现海量历史文档的标准化检索。
+- **会话即时记忆 (Session-level Local RAG)**：针对当前上传文档，基于 ChromaDB 构建轻量化索引，结合 **Docling** 完成高精度多模态解析（表格、公式、图像语义补全）。
+- **动态公域检索 (Real-time Web Search)**：集成 Tavily/DuckDuckGo 进行时效性信息补充，降低闭门推理导致的事实滞后风险。
 
 ### 📦 会话级资源隔离 (Session Lifecycle Management)
 
-临时文档按 `workspace_id` 建立独立的 Chroma Collection 与本地存储。通过钩子机制原子性销毁相关物理资源，防止多任务并发时的状态污染与内存泄漏。
+基于 `task_id` 维护独立工作空间（Workspace），确保不同调研任务的上下文、索引与物理存储彻底阻断。通过生命周期钩子在任务结束后执行资源原子化销毁，降低长连接场景下的状态污染与脏数据残留风险。
 
 ***
 
 ## 🏗️ 架构设计
+
+### 架构演进：微服务化与物理隔离
+
+针对原生 Agent 架构中检索模块高度耦合的问题，系统完成了检索链路的微服务化改造。通过实现 **MCP Client** 与标准工具协议，Agent 可以以 Tool 形式调用外部独立 RAG 服务。该改造将计算层（Agent 推理编排）与存储层（检索与索引）进行物理解耦，并显著提升了服务治理与水平扩展能力。
 
 ### 系统架构图
 
@@ -66,8 +70,8 @@ Worker Agent 根据任务意图，通过语义路由动态选择知识源：
 ┌─────────────────────────────────────────────────────────────┐
 │                    Infrastructure Layer                     │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
-│  │ OpenSearch   │  │  ChromaDB    │  │  Web Search  │       │
-│  │ (Global RAG) │  │ (Session RAG)│  │ (Tavily/DDG) │       │
+│  │   ChromaDB   │  │  MCP Client  │  │  Web Search  │       │
+│  │ (Session RAG)│  │ (Global RAG) │  │ (Tavily/DDG) │       │
 │  └──────────────┘  └──────────────┘  └──────────────┘       │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -85,7 +89,6 @@ Worker Agent 根据任务意图，通过语义路由动态选择知识源：
 - **Docker**: 20.10+
 - **UV**: 高性能Python包管理器
 - **Ollama**: 本地大模型推理引擎（用于embedding模型）
-- **GPU**: 可选（推荐RTX 4060及以上，用于TEI重排序器加速）
 
 ### 1. 克隆项目和安装依赖
 
@@ -149,7 +152,7 @@ ollama pull qwen3-embedding:4b
 
 项目提供了统一的启动脚本 `run.py`，该脚本会自动：
 
-- 检查并下载TEI重排序器模型文件（使用ModelScope）
+- 执行环境预检（包含可选模型兼容检查）
 - 检查并安装前端依赖（npm install）
 - 启动LiteLLM代理服务（端口4000）
 - 启动FastAPI后端服务（端口8002）
@@ -162,27 +165,13 @@ python run.py
 
 **启动脚本功能说明：**
 
-1. **预检阶段**: 检查并下载BGE重排序器模型到`models/BAAI/bge-reranker-base`目录，安装前端依赖
+1. **环境预检**: 检查环境与依赖，安装前端依赖
 2. **LiteLLM代理**: 启动统一模型代理服务，端口4000
-3. **FastAPI后端**: 启动API后端服务，端口8002
-4. **React前端**: 启动开发服务器，端口5173
+3. **FastAPI后端**: 启动图状态机 API 后端服务，端口8002
+4. **React前端**: 启动可视化交互界面，端口5173
 
-### 5. 启动基础设施服务
 
-在新的终端窗口中，启动OpenSearch和TEI服务：
-
-```bash
-# 启动必要的基础设施服务（OpenSearch、OpenSearch Dashboards、TEI Reranker）
-docker-compose up -d
-```
-
-**服务说明：**
-
-- **OpenSearch**: 搜索引擎与向量存储（端口9200）
-- **OpenSearch Dashboards**: OpenSearch可视化界面（端口5601）
-- **TEI Reranker**: 基于GPU的文档重排序服务（端口8082）
-
-### 6. （可选）启动Langfuse追踪服务
+### 5. （可选）启动Langfuse追踪服务
 
 如果需要使用Langfuse进行提示词管理、模型输入输出追踪和评估，启动可选的Langfuse服务：
 
@@ -238,13 +227,12 @@ docker-compose up -d
 
 如果不使用Langfuse，系统将使用代码中写死的提示词模板。
 
-### 7. 访问应用
+### 6. 访问应用
 
 当所有服务启动完成后，访问以下地址：
 
 - **前端应用**: <http://localhost:5173>
 - **API文档**: <http://localhost:8002/docs>
-- **OpenSearch Dashboards**: <http://localhost:5601>
 - **Langfuse Web** (可选): <http://localhost:3000>
 
 ### 完整启动顺序
@@ -253,9 +241,8 @@ docker-compose up -d
 2. `uv sync` 配置环境
 3. 配置 `.env` 环境变量信息（填入API密钥）
 4. 安装 Ollama 并执行 `ollama pull qwen3-embedding:4b`
-5. 运行 `python run.py`（包括下载TEI模型文件和启动前后端及LiteLLM服务）
-6. 运行 `docker-compose up -d`（项目根目录）
-7. 运行 `langfuse/docker-compose up -d`（可选）
+5. 运行 `python run.py`（一键启动前后端及 LiteLLM 服务）
+6. 运行 `langfuse/docker-compose up -d`（可选）
 
 ***
 
@@ -380,25 +367,6 @@ RESEARCH_LLM_MODEL="qwen3-max"  # 主要研究任务使用的模型
 RESEARCH_LLM_MAX_CONCURRENCY=30
 
 # ====================
-# TEI重排序器配置
-# ====================
-TEI_RERANK_BASE_URL="http://localhost:8082"  # TEI服务地址
-TEI_RERANK_API_KEY=None
-TEI_RERANK_MAX_CONCURRENCY=50
-TEI_RERANK_TIMEOUT=30.0
-
-# ====================
-# OpenSearch配置
-# ====================
-OPENSEARCH_INDEX_NAME="rag_system_chunks_async"
-OPENSEARCH_HOST="localhost"
-OPENSEARCH_PORT=9200
-AUTH="admin:admin"
-OPENSEARCH_USE_SSL=False
-OPENSEARCH_VERIFY_CERTS=False
-OPENSEARCH_BULK_CHUNK_SIZE=500
-
-# ====================
 # Langfuse追踪配置
 # ====================
 LANGFUSE_SECRET_KEY="sk-lf-xxx"  # 替换为你的密钥
@@ -406,7 +374,7 @@ LANGFUSE_PUBLIC_KEY="pk-lf-xxx"  # 替换为你的公钥
 LANGFUSE_BASE_URL="http://localhost:3000"
 ```
 
-### Embedding和Reranker模型配置说明
+### Embedding 模型配置说明
 
 **Embedding模型（向量化引擎）:**
 
@@ -442,46 +410,6 @@ EMBEDDING_LLM_MODEL="nomic-embedding-local"
 ```
 
 **硬件建议**: 4B模型建议至少4GB显存，推荐8GB以上。如果显存不足，可以选择1B参数的模型。
-
-**Reranker模型（重排序引擎）:**
-
-项目使用TEI（Text Embeddings Inference）作为Reranker模型的推理引擎，支持GPU加速。默认配置使用 `BAAI/bge-reranker-base` 模型，该模型：
-
-- 基础模型：BGE Reranker Base
-- 优势：基于GPU的高性能重排序
-- 推理地址：<http://localhost:8082>
-- 位置：models/BAAI/bge-reranker-base
-
-如需更换其他reranker模型，请执行以下步骤：
-
-1. **下载新模型**（例如bge-reranker-large）:
-
-```bash
-modelscope download --model BAAI/bge-reranker-large --local_dir models
-```
-
-1. **修改`docker-compose.yml`中的模型路径**:
-
-```yaml
-tei-reranker:
-  command: >
-    --model-id /models/BAAI/bge-reranker-large
-    --port 80
-    --dtype float16
-    --auto-truncate
-```
-
-1. **重启TEI服务**:
-
-```bash
-docker-compose up -d tei-reranker
-```
-
-**硬件建议**: TEI需要NVIDIA GPU，建议RTX 4090（24GB显存）或RTX 3090（24GB显存）。显存至少需要8GB。
-
-**注意**: 如果没有GPU，可以删除docker-compose.yml中的TEI服务相关配置，OpenSearch将使用向量相似度进行检索，但重排序效果会降低。
-
-***
 
 ## 📖 使用指南
 
@@ -591,7 +519,7 @@ docker-compose up -d tei-reranker
 3. 检索优化：
    - 首先基于关键词进行初步检索
    - 使用embedding模型进行语义匹配
-   - 使用TEI重排序器对候选文档进行精排
+   - 对候选文档执行相关性重排（重排服务不可用时自动降级）
    - 提取Top-K相关内容进行分析
 
 **预期耗时：** 每个研究方向需要1-5分钟，取决于文档库大小和研究深度。
@@ -746,13 +674,12 @@ deepresearch-agent/
 │       │   └── App.css            # 组件样式
 │       ├── package.json
 │       └── vite.config.js
-├── models/                        # TEI模型文件
-│   └── BAAI/bge-reranker-base
+├── models/                        # 可选模型缓存目录（按需生成）
 |—— langfuse/                      # langfuse部署文件
 |	└── .env					 # 环境变量
 |	└── docker-compose.yml         # 容器编排
 ├── data/                          # 核心数据目录 (工作区、向量库、数据库)
-├── docker-compose.yml             # 容器编排
+├── docker-compose.yml             # 可选扩展服务编排
 ├── config.yaml                    # LiteLLM配置
 ├── pyproject.toml                 # Python依赖
 ├── .env                           # 环境变量
@@ -793,14 +720,10 @@ deepresearch-agent/
 
 ***
 
-## 🙏 致谢
+## 🙏 致谢与参考
 
-感谢以下开源项目：
+本项目的系统性演进受益于以下开源生态：
 
-- [LangGraph](https://langchain-ai.github.io/langgraph) - 智能体编排框架
-- [Docling](https://github.com/DS4SD/docling) - 文档解析引擎
-- [DeepResearch](https://github.com/yjryjrhehe/deepresearch-agent) - 多智能体深度研究系统
-- [MODULAR-RAG-MCP-SERVER](https://github.com/zhunikaixin297/MODULAR-RAG-MCP-SERVER) - 模块化 RAG MCP 服务框架
-- [FastAPI](https://fastapi.tiangolo.com) - Web框架
-- [React](https://reactjs.org) - 前端框架
-
+- **架构启发**：感谢 [DeepResearch](https://github.com/yjryjrhehe/deepresearch-agent) 提供的多智能体拓扑思路，本项目在此基础上完成了微服务化解耦与隔离机制重构。
+- **协议支持**：基于 [Model Context Protocol](https://modelcontextprotocol.io/) 实现跨服务工具调用。
+- **基础设施**：感谢 [LangGraph](https://langchain-ai.github.io/langgraph)（编排）、[Docling](https://github.com/DS4SD/docling)（解析）、[Chroma](https://www.trychroma.com/)（会话存储）与 Web Search 生态社区的持续支持。
