@@ -2,6 +2,7 @@ import asyncio
 import os
 import json
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from mcp import ClientSession
 from mcp.client.stdio import stdio_client, StdioServerParameters
@@ -169,6 +170,24 @@ class KnowledgeBaseMCPClient:
 # Global instance for the factory
 _mcp_client: Optional[KnowledgeBaseMCPClient] = None
 
+
+def _resolve_local_mcp_server_path() -> Optional[str]:
+    """
+    Resolve local MCP server root path.
+    Priority:
+    1) MCP_SERVER_LOCAL_PATH (settings)
+    2) Auto-discover sibling repo: ../Enterprise-Modular-RAG-MCP
+    """
+    if settings.mcp.server_local_path:
+        return settings.mcp.server_local_path
+
+    repo_root = Path(__file__).resolve().parents[4]  # Multi-Source-Research-Agent
+    candidate = repo_root.parent / "Enterprise-Modular-RAG-MCP"
+    server_entry = candidate / "src" / "mcp_server" / "server.py"
+    if server_entry.exists():
+        return str(candidate)
+    return None
+
 def get_mcp_client() -> KnowledgeBaseMCPClient:
     global _mcp_client
     if _mcp_client is None:
@@ -179,6 +198,11 @@ def get_mcp_client() -> KnowledgeBaseMCPClient:
              _mcp_client = KnowledgeBaseMCPClient(sse_url=sse_url)
         else:
             # Fallback to local stdio mode using path from settings
-            server_path = settings.mcp.server_local_path
+            server_path = _resolve_local_mcp_server_path()
+            if not server_path:
+                raise ValueError(
+                    "MCP local server path is not configured. "
+                    "Set MCP_SERVER_LOCAL_PATH or MCP_SERVER_SSE_URL."
+                )
             _mcp_client = KnowledgeBaseMCPClient(server_script_path=server_path)
     return _mcp_client
